@@ -176,7 +176,6 @@ export function Sidebar() {
             </div>
           );
         })}
-        </div>
       </nav>
 
       <Separator className="bg-[#e8e6dc] dark:bg-[#30302e]" />
