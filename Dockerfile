@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------------------
 # Stage 1: Build the frontend (Vite → static assets under frontend/dist)
 # ----------------------------------------------------------------------------
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /build
 
 COPY frontend/package.json frontend/package-lock.json* ./frontend/
@@ -20,7 +20,7 @@ RUN cd frontend && npm run build
 # to be compiled on musl when no prebuilt binary matches. Keep the toolchain
 # out of the final image by doing the install in a throwaway stage.
 # ----------------------------------------------------------------------------
-FROM node:20-alpine AS backend-deps
+FROM node:22-alpine AS backend-deps
 WORKDIR /build
 
 RUN apk add --no-cache python3 make g++ libc6-compat
@@ -31,7 +31,7 @@ RUN npm ci --omit=dev
 # ----------------------------------------------------------------------------
 # Stage 3: Runtime image
 # ----------------------------------------------------------------------------
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 
 # Deckhouse spawns `docker compose ...` via child_process; both the CLI and

@@ -29,7 +29,7 @@ npm run build:frontend
 npm run start
 ```
 
-No test framework is configured yet. Node >= 20 required.
+No test framework is configured yet. Node >= 22 required.
 
 ## Architecture
 
