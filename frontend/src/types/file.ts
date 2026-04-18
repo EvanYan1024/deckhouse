@@ -15,3 +15,12 @@ export interface FileContent {
   readOnly: boolean;
   tooLarge: boolean;
 }
+
+export interface VolumeInfo {
+  serviceName: string;
+  source: string;
+  target: string;
+  resolvedSource: string;
+  type: "bind";
+  isStackLocal: boolean;
+}

@@ -119,12 +119,13 @@ export function ContainerTerminal({ stackName, endpoint }: ContainerTerminalProp
                 </div>
             </div>
 
-            {/* Terminal */}
+            {/* Terminal — explicit bg matches xterm theme so the sub-row gap
+                below xterm's last line doesn't leak the page background */}
             {selectedService ? (
                 <div
                     ref={containerRef}
-                    className="rounded-xl border border-[#30302e] overflow-hidden"
-                    style={{ minHeight: 400 }}
+                    className="border border-[#30302e] overflow-hidden bg-[#141413]"
+                    style={{ height: 400 }}
                 />
             ) : (
                 <div className="flex items-center justify-center rounded-xl border border-[#e8e6dc] bg-[#f0eee6] py-16 dark:border-[#30302e] dark:bg-[#1e1e1c]">

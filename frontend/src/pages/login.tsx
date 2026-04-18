@@ -16,6 +16,7 @@ export function LoginPage() {
   const connect = useSocketStore((s) => s.connect);
   const connected = useSocketStore((s) => s.connected);
   const socket = useSocketStore((s) => s.socket);
+  const setAuthenticated = useSocketStore((s) => s.setAuthenticated);
   const navigate = useNavigate();
 
   // Connect on mount
@@ -49,6 +50,9 @@ export function LoginPage() {
         setLoading(false);
         if (res.ok && res.token) {
           login(res.token, username, res.isAdmin === true);
+          // Backend already called afterLogin() for this socket; mirror that
+          // into the store so effects gated on `authenticated` fire.
+          setAuthenticated(true);
           navigate("/");
         } else {
           setError(res.msg ?? "Login failed");

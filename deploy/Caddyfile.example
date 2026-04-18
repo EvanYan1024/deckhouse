@@ -1,0 +1,26 @@
+# Caddy v2 reverse proxy for Deckhouse.
+# Caddy handles HTTPS automatically (Let's Encrypt) and upgrades WebSocket
+# connections without extra config — Socket.IO just works.
+#
+# Replace the hostname, then:
+#   sudo cp Caddyfile.example /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+
+deckhouse.example.com {
+    encode gzip zstd
+
+    # Basic rate limit on auth endpoints if you install the ratelimit plugin
+    # (optional — comment out if you don't have it):
+    # rate_limit /socket.io/* 30r/m
+
+    reverse_proxy 127.0.0.1:5001
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "same-origin"
+        # Deckhouse does not need to be framed anywhere
+        X-Frame-Options "DENY"
+    }
+}

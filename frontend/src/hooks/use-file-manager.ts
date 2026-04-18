@@ -3,7 +3,13 @@ import { useSocketStore } from "@/stores/socket-store";
 import type { FileEntry, FileContent } from "@/types/file";
 import { toast } from "sonner";
 
-export function useFileManager(stackName: string, endpoint: string) {
+/**
+ * `rootPath` is the server-side prefix for list operations. For a stack it's
+ * the bare stack name; for a volume it's `@vol/<stackName>/<urlencodedSource>`.
+ * Read / write / create / delete / rename / download all take a full path
+ * built by the caller, so they don't consult `rootPath` directly.
+ */
+export function useFileManager(rootPath: string, endpoint: string) {
     const emitAgent = useSocketStore((s) => s.emitAgent);
     const [entries, setEntries] = useState<FileEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -11,8 +17,8 @@ export function useFileManager(stackName: string, endpoint: string) {
     const listDir = useCallback((relativePath: string) => {
         setLoading(true);
         const dirPath = relativePath
-            ? `${stackName}/${relativePath}`
-            : stackName;
+            ? `${rootPath}/${relativePath}`
+            : rootPath;
 
         emitAgent(endpoint, "file:listDir", dirPath, (res: Record<string, unknown>) => {
             setLoading(false);
@@ -22,7 +28,7 @@ export function useFileManager(stackName: string, endpoint: string) {
                 toast.error(String(res.msg ?? "Failed to list directory"));
             }
         });
-    }, [stackName, endpoint, emitAgent]);
+    }, [rootPath, endpoint, emitAgent]);
 
     const readFile = useCallback((filePath: string): Promise<FileContent> => {
         return new Promise((resolve, reject) => {

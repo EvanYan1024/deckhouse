@@ -17,6 +17,7 @@ export function SetupPage() {
   const connect = useSocketStore((s) => s.connect);
   const connected = useSocketStore((s) => s.connected);
   const socket = useSocketStore((s) => s.socket);
+  const setAuthenticated = useSocketStore((s) => s.setAuthenticated);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -53,6 +54,9 @@ export function SetupPage() {
         if (res.ok && res.token) {
           // First setup user is always admin; backend also sends isAdmin: true
           login(res.token, username, res.isAdmin === true);
+          // Backend already called afterLogin() for this socket; mirror that
+          // into the store so effects gated on `authenticated` fire.
+          setAuthenticated(true);
           navigate("/");
         } else {
           setError(res.msg ?? "Setup failed");

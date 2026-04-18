@@ -11,14 +11,14 @@ import { Upload, Loader2 } from "lucide-react";
 interface FileUploadDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    stackName: string;
+    rootPath: string;
     currentPath: string;
     endpoint: string;
     onUploaded: () => void;
 }
 
 export function FileUploadDialog({
-    open, onOpenChange, stackName, currentPath, endpoint, onUploaded,
+    open, onOpenChange, rootPath, currentPath, endpoint, onUploaded,
 }: FileUploadDialogProps) {
     const emitAgent = useSocketStore((s) => s.emitAgent);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,8 +33,8 @@ export function FileUploadDialog({
         reader.onload = () => {
             const base64 = (reader.result as string).split(",")[1];
             const filePath = currentPath
-                ? `${stackName}/${currentPath}/${selectedFile.name}`
-                : `${stackName}/${selectedFile.name}`;
+                ? `${rootPath}/${currentPath}/${selectedFile.name}`
+                : `${rootPath}/${selectedFile.name}`;
 
             emitAgent(endpoint, "file:upload", filePath, base64, (res: Record<string, unknown>) => {
                 setUploading(false);

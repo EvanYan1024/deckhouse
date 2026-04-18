@@ -60,7 +60,7 @@ export function ProgressTerminal({ stackName }: ProgressTerminalProps) {
     return (
         <div
             ref={containerRef}
-            className="rounded-xl border border-[#30302e] overflow-hidden"
+            className="border border-[#30302e] overflow-hidden bg-[#141413]"
             style={{ height: 200 }}
         />
     );

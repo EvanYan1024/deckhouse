@@ -20,6 +20,15 @@ const acceptedComposeFileNames = [
     "docker-compose.yml",
 ];
 
+export interface VolumeInfo {
+    serviceName: string;
+    source: string;         // as declared in compose (./data, /opt/x, ~/foo)
+    target: string;         // container mount path
+    resolvedSource: string; // absolute host path
+    type: "bind";
+    isStackLocal: boolean;  // resolvedSource lives under server.stacksDir
+}
+
 export class Stack {
     name: string;
     protected _status: number = UNKNOWN;
@@ -306,6 +315,130 @@ export class Stack {
         } catch {
             this._status = fs.existsSync(this.composeFilePath) ? CREATED_FILE : UNKNOWN;
         }
+    }
+
+    /**
+     * Parse compose YAML and return every bind-mount declared by any service.
+     * Named volumes (top-level `volumes:` entries, or sources that aren't
+     * filesystem paths) are skipped — resolving them would require
+     * `docker volume inspect` and mounting /var/lib/docker/volumes into the
+     * Deckhouse container, which is out of scope for v1.
+     */
+    async getVolumes(): Promise<VolumeInfo[]> {
+        if (!this.composeYAML) return [];
+
+        let parsed: unknown;
+        try {
+            parsed = YAML.parse(this.composeYAML);
+        } catch (e) {
+            throw new ValidationError(
+                `Invalid YAML: ${e instanceof Error ? e.message : String(e)}`
+            );
+        }
+
+        if (!parsed || typeof parsed !== "object") return [];
+        const root = parsed as Record<string, unknown>;
+
+        const services = root.services;
+        if (!services || typeof services !== "object") return [];
+
+        // Anything declared at the top level is a named volume; skip those
+        // references when we encounter them in service volume lists.
+        const topLevelVolumes = new Set<string>();
+        if (root.volumes && typeof root.volumes === "object") {
+            for (const key of Object.keys(root.volumes as object)) {
+                topLevelVolumes.add(key);
+            }
+        }
+
+        const result: VolumeInfo[] = [];
+
+        for (const [serviceName, service] of Object.entries(services)) {
+            if (!service || typeof service !== "object") continue;
+            const vols = (service as Record<string, unknown>).volumes;
+            if (!Array.isArray(vols)) continue;
+
+            for (const v of vols) {
+                const parsedVol = this.parseVolumeEntry(v);
+                if (!parsedVol) continue;
+                const { source, target } = parsedVol;
+
+                // Named volume reference (declared at top level) — skip
+                if (topLevelVolumes.has(source)) continue;
+
+                // A bind source is a filesystem path. Anything else (bare
+                // identifier) is an undeclared name and would fail at runtime
+                // anyway — skip it rather than misclassify as bind.
+                if (!Stack.looksLikeBindPath(source)) continue;
+
+                const resolvedSource = this.resolveBindSource(source);
+                if (!resolvedSource) continue;
+
+                const stacksDir = this.server.stacksDir;
+                const isStackLocal =
+                    resolvedSource === stacksDir ||
+                    resolvedSource.startsWith(stacksDir + path.sep);
+
+                result.push({
+                    serviceName,
+                    source,
+                    target,
+                    resolvedSource,
+                    type: "bind",
+                    isStackLocal,
+                });
+            }
+        }
+
+        return result;
+    }
+
+    private parseVolumeEntry(v: unknown): { source: string; target: string } | null {
+        if (typeof v === "string") {
+            // short syntax: "src:dst[:mode]". A single segment is an anonymous
+            // in-container volume with no host path, nothing to browse.
+            const parts = v.split(":");
+            if (parts.length < 2) return null;
+            const source = parts[0];
+            const target = parts[1];
+            if (!source || !target) return null;
+            return { source, target };
+        }
+        if (v && typeof v === "object") {
+            const obj = v as Record<string, unknown>;
+            if (obj.type !== undefined && obj.type !== "bind") return null;
+            const source = obj.source;
+            const target = obj.target;
+            if (typeof source !== "string" || typeof target !== "string") return null;
+            if (!source || !target) return null;
+            return { source, target };
+        }
+        return null;
+    }
+
+    private static looksLikeBindPath(source: string): boolean {
+        return (
+            source.startsWith("/") ||
+            source.startsWith("./") ||
+            source.startsWith("../") ||
+            source === "." ||
+            source === ".." ||
+            source.startsWith("~")
+        );
+    }
+
+    private resolveBindSource(source: string): string | null {
+        if (source.startsWith("~")) {
+            const home = process.env.HOME;
+            if (!home) return null;
+            return path.resolve(home + source.slice(1));
+        }
+        if (source.startsWith("/")) {
+            return path.resolve(source);
+        }
+        // Relative sources resolve against the compose-file directory, which
+        // for Deckhouse is always the stack directory.
+        return path.resolve(this.path, source);
     }
 
     async getServiceStatusList(): Promise<Record<string, unknown>[]> {

@@ -1,0 +1,51 @@
+# Deploy Deckhouse itself.
+#
+#   cd deploy
+#   docker compose up -d --build
+#
+# ---------------------------------------------------------------------------
+# Why the stacks path is identical on both sides of the bind mount
+# ---------------------------------------------------------------------------
+# Deckhouse runs `docker compose -f /opt/deckhouse/stacks/<name>/compose.yaml`
+# via child_process. That command is sent over /var/run/docker.sock to the
+# HOST docker daemon, which then resolves the path against the HOST filesystem
+# — not the container's.
+#
+# Putting the same absolute path on both sides of the bind mount means:
+#   * Deckhouse writes compose files to /opt/deckhouse/stacks/foo/ inside
+#     the container.
+#   * The host daemon reads /opt/deckhouse/stacks/foo/ from the host.
+#   * Volumes declared in the user's compose (e.g. ./data:/data) resolve
+#     correctly in both contexts.
+# ---------------------------------------------------------------------------
+
+services:
+  deckhouse:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: deckhouse:latest
+    container_name: deckhouse
+    restart: unless-stopped
+    # Reap zombies from spawned docker/pty processes without shipping tini.
+    init: true
+
+    # Bind to localhost only. Expose the service through a reverse proxy
+    # (see Caddyfile.example) so TLS and access control live outside Deckhouse.
+    ports:
+      - "127.0.0.1:5001:5001"
+
+    environment:
+      DECKHOUSE_STACKS_DIR: "/opt/deckhouse/stacks"
+      # Uncomment to enable the host shell (admin-only, very privileged —
+      # anyone with admin access gets root on the host):
+      # DECKHOUSE_ENABLE_CONSOLE: "1"
+
+    volumes:
+      # Host docker daemon socket — Deckhouse sends compose commands through it.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persistent data: users.json, jwt-secret.txt, agents.json, settings.json.
+      # Safe to change the host path; the container side can stay at /app/data.
+      - /opt/deckhouse/data:/app/data
+      # Stacks directory — host path MUST match DECKHOUSE_STACKS_DIR above.
+      - /opt/deckhouse/stacks:/opt/deckhouse/stacks

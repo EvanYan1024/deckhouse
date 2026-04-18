@@ -25,13 +25,13 @@ const langExtensions: Record<string, () => Extension> = {
 
 interface FileEditorProps {
     filePath: string;
-    stackName: string;
+    rootPath: string;
     endpoint: string;
     onClose: () => void;
     onSaved: () => void;
 }
 
-export function FileEditor({ filePath, stackName, endpoint, onClose, onSaved }: FileEditorProps) {
+export function FileEditor({ filePath, rootPath, endpoint, onClose, onSaved }: FileEditorProps) {
     const [content, setContent] = useState("");
     const [originalContent, setOriginalContent] = useState("");
     const [readOnly, setReadOnly] = useState(false);
@@ -41,7 +41,7 @@ export function FileEditor({ filePath, stackName, endpoint, onClose, onSaved }: 
 
     const themeMode = useThemeStore((s) => s.theme);
     const isDark = themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    const fm = useFileManager(stackName, endpoint);
+    const fm = useFileManager(rootPath, endpoint);
 
     const fileName = filePath.split("/").pop() ?? "";
     const ext = fileName.includes(".") ? "." + fileName.split(".").pop()!.toLowerCase() : "";

@@ -30,7 +30,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" render={<Link to="/" />}>
                             <div className="flex size-8 items-center justify-center">
-                                <Logo size={28} className="text-[#c96442]" />
+                                {/* SidebarMenuButton forces `[&_svg]:size-4` on
+                                    descendant svgs, which clobbers Logo's own
+                                    width/height. Use `!` to restore 28px. */}
+                                <Logo size={28} className="text-[#c96442] !size-7" />
                             </div>
                             <span className="truncate text-base font-semibold tracking-tight">
                                 Deckhouse

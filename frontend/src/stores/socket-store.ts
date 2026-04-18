@@ -16,6 +16,11 @@ interface SocketState {
   connect: () => void;
   disconnect: () => void;
   emitAgent: (endpoint: string, event: string, ...args: unknown[]) => void;
+  // Login / setup pages call this after a successful credential exchange so
+  // React components gated on `authenticated` (e.g. ComposePage's loadStack
+  // effect) can proceed. The socket is already logged-in server-side via
+  // afterLogin(); this just catches the store up.
+  setAuthenticated: (value: boolean) => void;
 }
 
 export const useSocketStore = create<SocketState>((set, get) => ({
@@ -116,4 +121,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (!socket) return;
     socket.emit("agent", endpoint, event, ...args);
   },
+
+  setAuthenticated: (value) => set({ authenticated: value }),
 }));

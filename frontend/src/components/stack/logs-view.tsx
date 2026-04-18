@@ -129,11 +129,12 @@ export function LogsView({ stackName, endpoint }: LogsViewProps) {
                 </span>
             </div>
 
-            {/* Terminal */}
+            {/* Terminal — explicit bg matches xterm theme so the sub-row gap
+                below xterm's last line doesn't leak the page background */}
             <div
                 ref={containerRef}
-                className="rounded-xl border border-[#30302e] overflow-hidden"
-                style={{ minHeight: 400 }}
+                className="border border-[#30302e] overflow-hidden bg-[#141413]"
+                style={{ height: 400 }}
             />
         </div>
     );
