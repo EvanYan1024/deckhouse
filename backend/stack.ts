@@ -352,6 +352,7 @@ export class Stack {
         }
 
         const result: VolumeInfo[] = [];
+        const env = this.parseEnvFile();
 
         for (const [serviceName, service] of Object.entries(services)) {
             if (!service || typeof service !== "object") continue;
@@ -366,12 +367,17 @@ export class Stack {
                 // Named volume reference (declared at top level) — skip
                 if (topLevelVolumes.has(source)) continue;
 
+                // Expand ${VAR} / $VAR against stack's .env + process.env.
+                // Compose does the same substitution at runtime; without it,
+                // a source like "${ROOT_DIR}/data" never looks like a path.
+                const expandedSource = Stack.expandEnvVars(source, env);
+
                 // A bind source is a filesystem path. Anything else (bare
                 // identifier) is an undeclared name and would fail at runtime
                 // anyway — skip it rather than misclassify as bind.
-                if (!Stack.looksLikeBindPath(source)) continue;
+                if (!Stack.looksLikeBindPath(expandedSource)) continue;
 
-                const resolvedSource = this.resolveBindSource(source);
+                const resolvedSource = this.resolveBindSource(expandedSource);
                 if (!resolvedSource) continue;
 
                 const stacksDir = this.server.stacksDir;
@@ -391,6 +397,47 @@ export class Stack {
         }
 
         return result;
+    }
+
+    private parseEnvFile(): Record<string, string> {
+        const env: Record<string, string> = {};
+        const raw = this.composeENV;
+        if (!raw) return env;
+        for (const line of raw.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("#")) continue;
+            const eq = trimmed.indexOf("=");
+            if (eq <= 0) continue;
+            const key = trimmed.slice(0, eq).trim();
+            let value = trimmed.slice(eq + 1).trim();
+            if (
+                (value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'"))
+            ) {
+                value = value.slice(1, -1);
+            }
+            env[key] = value;
+        }
+        return env;
+    }
+
+    private static expandEnvVars(source: string, env: Record<string, string>): string {
+        const lookup = (name: string): string | undefined =>
+            env[name] !== undefined ? env[name] : process.env[name];
+
+        let out = source.replace(
+            /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}/g,
+            (_, name: string, def: string | undefined) => {
+                const v = lookup(name);
+                if (v !== undefined && v !== "") return v;
+                return def ?? "";
+            },
+        );
+        out = out.replace(
+            /\$([A-Za-z_][A-Za-z0-9_]*)/g,
+            (_, name: string) => lookup(name) ?? "",
+        );
+        return out;
     }
 
     private parseVolumeEntry(v: unknown): { source: string; target: string } | null {
