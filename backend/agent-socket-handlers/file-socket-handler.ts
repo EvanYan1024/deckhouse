@@ -109,8 +109,22 @@ export class FileSocketHandler extends AgentSocketHandler {
                     throw new ValidationError("Path must be a string");
                 }
                 const ctx = await resolveFileContext(server, dirPath);
-                const entries = await ctx.fileManager.listDir(ctx.absolutePath);
-                callbackResult({ ok: true, entries }, callback);
+                try {
+                    const entries = await ctx.fileManager.listDir(ctx.absolutePath);
+                    callbackResult({ ok: true, entries }, callback);
+                } catch (inner) {
+                    // Bind-mount host paths are often created lazily by
+                    // `docker compose up` or by the user. Don't surface ENOENT
+                    // as an error — let the UI offer to create the directory.
+                    if ((inner as NodeJS.ErrnoException).code === "ENOENT") {
+                        callbackResult(
+                            { ok: true, entries: [], notExists: true },
+                            callback,
+                        );
+                        return;
+                    }
+                    throw inner;
+                }
             } catch (e) {
                 callbackError(e, callback);
             }

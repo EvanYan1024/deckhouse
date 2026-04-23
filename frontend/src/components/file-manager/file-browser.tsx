@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSocketStore } from "@/stores/socket-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { useFileManager } from "@/hooks/use-file-manager";
 import { useStackVolumes } from "@/hooks/use-stack-volumes";
 import { FileBreadcrumb } from "./file-breadcrumb";
@@ -8,8 +9,10 @@ import { FileList } from "./file-list";
 import { FileEditor } from "./file-editor";
 import { FileCreateDialog } from "./file-create-dialog";
 import { FileUploadDialog } from "./file-upload-dialog";
+import { StackTerminal } from "../stack/stack-terminal";
 import type { FileEntry, VolumeInfo } from "@/types/file";
-import { ArrowLeft, FolderOpen } from "lucide-react";
+import { ArrowLeft, FolderOpen, FolderPlus } from "lucide-react";
+import { toast } from "sonner";
 
 interface FileBrowserProps {
     stackName: string;
@@ -26,9 +29,22 @@ export function FileBrowser({ stackName, endpoint }: FileBrowserProps) {
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [createType, setCreateType] = useState<"file" | "dir">("file");
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+    const [terminalOpen, setTerminalOpen] = useState(false);
+    const [consoleEnabled, setConsoleEnabled] = useState(false);
 
     const authenticated = useSocketStore((s) => s.authenticated);
+    const socket = useSocketStore((s) => s.socket);
+    const isAdmin = useAuthStore((s) => s.isAdmin);
     const { volumes, refresh: refreshVolumes } = useStackVolumes(stackName, endpoint);
+
+    useEffect(() => {
+        if (!socket) return;
+        socket.emit("getInfo", (res: { ok: boolean; consoleEnabled?: boolean }) => {
+            if (res.ok) setConsoleEnabled(!!res.consoleEnabled);
+        });
+    }, [socket]);
+
+    const showTerminalControls = view === "stack" && consoleEnabled && isAdmin;
 
     // For the stack view, rootPath is the stack name — backward-compatible with
     // the pre-volume behavior. For a selected volume, we emit the sentinel
@@ -95,6 +111,9 @@ export function FileBrowser({ stackName, endpoint }: FileBrowserProps) {
         setActiveVolume(null);
         setCurrentPath("");
         setEditingFile(null);
+        // Close the host shell when leaving the stack view — it's scoped
+        // to stacks/<name> and volume browsing doesn't expose it.
+        if (next !== "stack") setTerminalOpen(false);
         if (next === "volumes") refreshVolumes();
     };
 
@@ -175,23 +194,58 @@ export function FileBrowser({ stackName, endpoint }: FileBrowserProps) {
                         onNewDir={() => { setCreateType("dir"); setCreateDialogOpen(true); }}
                         onUpload={() => setUploadDialogOpen(true)}
                         onRefresh={() => fm.listDir(currentPath)}
+                        onToggleTerminal={showTerminalControls ? () => setTerminalOpen((v) => !v) : undefined}
+                        terminalOpen={terminalOpen}
                     />
 
-                    <FileList
-                        entries={fm.entries}
-                        loading={fm.loading}
-                        currentPath={currentPath}
-                        onOpen={handleOpen}
-                        onDelete={async (entry) => {
-                            await fm.deleteItem(buildFullPath(entry.name));
-                            fm.listDir(currentPath);
-                        }}
-                        onRename={async (entry, newName) => {
-                            await fm.renameItem(buildFullPath(entry.name), newName);
-                            fm.listDir(currentPath);
-                        }}
-                        onDownload={(entry) => fm.downloadFile(buildFullPath(entry.name))}
-                    />
+                    {showTerminalControls && terminalOpen && (
+                        <StackTerminal stackName={stackName} />
+                    )}
+
+                    {fm.notExists ? (
+                        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-8 text-center">
+                            <FolderPlus className="h-6 w-6 text-muted-foreground" />
+                            <div className="space-y-1">
+                                <p className="text-[14px] font-medium">Directory does not exist</p>
+                                <p className="text-[12px] text-muted-foreground">
+                                    The bind-mount host path hasn't been created yet.
+                                </p>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    const target = currentPath
+                                        ? `${rootPath}/${currentPath}`
+                                        : rootPath;
+                                    try {
+                                        await fm.createDir(target);
+                                        toast.success("Directory created");
+                                        fm.listDir(currentPath);
+                                    } catch (e) {
+                                        toast.error(e instanceof Error ? e.message : String(e));
+                                    }
+                                }}
+                                className="rounded-md bg-[#c96442] px-3 py-1.5 text-[13px] font-medium text-[#faf9f5] hover:bg-[#b75a3b]"
+                            >
+                                Create directory
+                            </button>
+                        </div>
+                    ) : (
+                        <FileList
+                            entries={fm.entries}
+                            loading={fm.loading}
+                            currentPath={currentPath}
+                            onOpen={handleOpen}
+                            onDelete={async (entry) => {
+                                await fm.deleteItem(buildFullPath(entry.name));
+                                fm.listDir(currentPath);
+                            }}
+                            onRename={async (entry, newName) => {
+                                await fm.renameItem(buildFullPath(entry.name), newName);
+                                fm.listDir(currentPath);
+                            }}
+                            onDownload={(entry) => fm.downloadFile(buildFullPath(entry.name))}
+                        />
+                    )}
 
                     <FileCreateDialog
                         open={createDialogOpen}

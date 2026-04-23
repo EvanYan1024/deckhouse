@@ -13,6 +13,7 @@ export function useFileManager(rootPath: string, endpoint: string) {
     const emitAgent = useSocketStore((s) => s.emitAgent);
     const [entries, setEntries] = useState<FileEntry[]>([]);
     const [loading, setLoading] = useState(false);
+    const [notExists, setNotExists] = useState(false);
 
     const listDir = useCallback((relativePath: string) => {
         setLoading(true);
@@ -24,6 +25,7 @@ export function useFileManager(rootPath: string, endpoint: string) {
             setLoading(false);
             if (res.ok) {
                 setEntries(res.entries as FileEntry[]);
+                setNotExists(Boolean(res.notExists));
             } else {
                 toast.error(String(res.msg ?? "Failed to list directory"));
             }
@@ -105,7 +107,7 @@ export function useFileManager(rootPath: string, endpoint: string) {
     }, [endpoint, emitAgent]);
 
     return {
-        entries, loading,
+        entries, loading, notExists,
         listDir, readFile, writeFile,
         createDir, createFile, deleteItem, renameItem,
         downloadFile,

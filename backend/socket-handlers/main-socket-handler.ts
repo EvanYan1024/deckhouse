@@ -319,7 +319,13 @@ export class MainSocketHandler extends SocketHandler {
         });
 
         // --- Host console (main terminal) ---
-        socket.on("openMainTerminal", async (terminalId: unknown, callback: unknown) => {
+        socket.on("openMainTerminal", async (...args: unknown[]) => {
+            // Variadic: (terminalId, callback) or (terminalId, stackName, callback).
+            // Socket.IO always puts the callback last.
+            const last = args[args.length - 1];
+            const callback = typeof last === "function" ? last : undefined;
+            const terminalId = args[0];
+            const stackName = args.length >= 3 ? args[1] : undefined;
             try {
                 checkAdmin(socket, server);
                 if (process.env.DECKHOUSE_ENABLE_CONSOLE !== "1") {
@@ -327,12 +333,28 @@ export class MainSocketHandler extends SocketHandler {
                 }
                 if (typeof terminalId !== "string") throw new ValidationError("terminalId must be a string");
 
+                let cwd = server.stacksDir;
+                if (stackName !== undefined) {
+                    if (typeof stackName !== "string" || !stackName) {
+                        throw new ValidationError("stackName must be a non-empty string");
+                    }
+                    const stacksRoot = path.resolve(server.stacksDir);
+                    const candidate = path.resolve(stacksRoot, stackName);
+                    if (candidate !== stacksRoot && !candidate.startsWith(stacksRoot + path.sep)) {
+                        throw new ValidationError("stackName escapes stacksDir");
+                    }
+                    if (!fs.existsSync(candidate)) {
+                        throw new ValidationError(`Stack directory does not exist: ${stackName}`);
+                    }
+                    cwd = candidate;
+                }
+
                 this.killMainTerminal(terminalId);
 
                 const shell = process.env.SHELL || "/bin/bash";
                 const ptyProcess = pty.spawn(shell, [], {
                     name: "xterm-256color",
-                    cwd: server.stacksDir,
+                    cwd,
                     cols: 80,
                     rows: 24,
                     env: process.env as unknown as Record<string, string>,
